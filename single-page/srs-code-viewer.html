@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SRS + Code Viewer</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #64748b;
+      --border: #d9e0e7;
+      --accent: #2563eb;
+      --code-bg: #f1f5f9;
+
+      --syntax-keyword: #7c3aed;
+      --syntax-string: #15803d;
+      --syntax-number: #c2410c;
+      --syntax-comment: #64748b;
+      --syntax-function: #2563eb;
+      --syntax-operator: #be185d;
+      --syntax-property: #0369a1;
+      --syntax-tag: #b91c1c;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --panel: #1f2937;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --border: #374151;
+        --accent: #93c5fd;
+        --code-bg: #111827;
+
+        --syntax-keyword: #c4b5fd;
+        --syntax-string: #86efac;
+        --syntax-number: #fdba74;
+        --syntax-comment: #9ca3af;
+        --syntax-function: #93c5fd;
+        --syntax-operator: #f9a8d4;
+        --syntax-property: #7dd3fc;
+        --syntax-tag: #fca5a5;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 system-ui, sans-serif;
+    }
+
+    header {
+      padding: 1.25rem clamp(1rem, 3vw, 2rem);
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    h1 {
+      margin: 0 0 0.75rem;
+      font-size: 1.4rem;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    label {
+      font-weight: 600;
+    }
+
+    select,
+    button {
+      font: inherit;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    select {
+      min-width: 14rem;
+    }
+
+    #status {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    main {
+      padding: 1rem clamp(0.75rem, 2vw, 1.5rem) 1.5rem;
+    }
+
+    #feature-index {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    #feature-index button {
+      cursor: pointer;
+    }
+
+    #feature-index button[aria-pressed="true"] {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 1rem;
+    }
+
+    .content {
+      min-height: 65vh;
+      max-height: calc(100vh - 210px);
+      overflow: auto;
+      padding: 1rem;
+    }
+
+    #srs-content {
+      overflow-wrap: anywhere;
+    }
+
+    #srs-content > :first-child {
+      margin-top: 0;
+    }
+
+    #srs-content pre {
+      overflow: auto;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      background: var(--code-bg);
+    }
+
+    #code-content {
+      padding: 0;
+      overflow: auto;
+    }
+
+    #code-content pre {
+      margin: 0;
+      padding: 1rem;
+      min-height: 65vh;
+      overflow: auto;
+      background: var(--code-bg);
+      border-radius: 0;
+      white-space: pre;
+      tab-size: 4;
+    }
+
+    #code-content code {
+      font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.6;
+      letter-spacing: normal;
+      font-style: normal;
+    }
+
+    /* Syntax highlighting */
+
+    .token-keyword {
+      color: var(--syntax-keyword);
+    }
+
+    .token-string {
+      color: var(--syntax-string);
+    }
+
+    .token-number {
+      color: var(--syntax-number);
+    }
+
+    .token-comment {
+      color: var(--syntax-comment);
+      font-style: italic;
+    }
+
+    .token-function {
+      color: var(--syntax-function);
+    }
+
+    .token-operator {
+      color: var(--syntax-operator);
+    }
+
+    .token-property {
+      color: var(--syntax-property);
+    }
+
+    .token-tag {
+      color: var(--syntax-tag);
+    }
+
+    .message {
+      color: var(--muted);
+    }
+
+    .error {
+      color: #dc2626;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 800px) {
+      .panels {
+        grid-template-columns: 1fr;
+      }
+
+      .content,
+      #code-content pre {
+        min-height: 40vh;
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>SRS + Code Viewer</h1>
+
+    <div class="toolbar">
+      <label for="project-select">Project</label>
+      <select id="project-select" aria-label="Select project"></select>
+      <span id="status" role="status">
+        Choose a feature to load its SRS and source code.
+      </span>
+    </div>
+  </header>
+
+  <main>
+    <nav id="feature-index" aria-label="Feature index"></nav>
+
+    <div class="panels">
+      <section class="panel" aria-labelledby="srs-heading">
+        <h2 id="srs-heading">SRS</h2>
+
+        <article id="srs-content" class="content">
+          <p class="message">Select a feature.</p>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="code-heading">
+        <h2 id="code-heading">Source code</h2>
+
+        <div id="code-content" class="content">
+          <p class="message">Select a feature.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    // Configure projects and features here.
+    const PROJECTS = [
+      {
+        name: "Automation Scripts",
+        features: [
+          {
+            name: "Log",
+            srsUrl:
+              "https://raw.githubusercontent.com/atari-monk/automation-scripts/main/docs/srs/script/log.md",
+            codeUrl:
+              "https://raw.githubusercontent.com/atari-monk/automation-scripts/main/src/log.py"
+          },
+          {
+            name: "Log Input",
+            srsUrl:
+              "https://raw.githubusercontent.com/atari-monk/automation-scripts/main/docs/srs/script/log-input.md",
+            codeUrl:
+              "https://raw.githubusercontent.com/atari-monk/automation-scripts/main/src/log_input.py"
+          }
+        ]
+      },
+      {
+        name: "Example Project",
+        features: [
+          {
+            name: "Example Feature",
+            srsUrl: "",
+            codeUrl: ""
+          }
+        ]
+      }
+    ];
+
+    const projectSelect = document.getElementById("project-select");
+    const featureIndex = document.getElementById("feature-index");
+    const srsContent = document.getElementById("srs-content");
+    const codeContent = document.getElementById("code-content");
+    const status = document.getElementById("status");
+
+    let requestNumber = 0;
+
+    function showMessage(element, message, isError = false) {
+      element.replaceChildren();
+
+      const p = document.createElement("p");
+      p.className = isError ? "error" : "message";
+      p.textContent = message;
+
+      element.appendChild(p);
+    }
+
+    function getLanguage(url) {
+      const path = (url || "").split("?")[0].toLowerCase();
+      const extension = path.split(".").pop();
+
+      const languages = {
+        py: "python",
+        js: "javascript",
+        mjs: "javascript",
+        cjs: "javascript",
+        ts: "typescript",
+        json: "json",
+        html: "html",
+        htm: "html",
+        xml: "html",
+        svg: "html",
+        css: "css",
+        rs: "rust",
+        go: "go",
+        sh: "bash",
+        bash: "bash",
+        yml: "yaml",
+        yaml: "yaml"
+      };
+
+      return languages[extension] || "javascript";
+    }
+
+    function populateProjects() {
+      PROJECTS.forEach((project, index) => {
+        const option = document.createElement("option");
+
+        option.value = String(index);
+        option.textContent = project.name;
+
+        projectSelect.appendChild(option);
+      });
+    }
+
+    function renderFeatureButtons(project) {
+      featureIndex.replaceChildren();
+
+      project.features.forEach((feature, index) => {
+        const button = document.createElement("button");
+
+        button.type = "button";
+        button.textContent = feature.name;
+        button.setAttribute("aria-pressed", String(index === 0));
+
+        button.addEventListener("click", () => {
+          featureIndex.querySelectorAll("button").forEach((item) => {
+            item.setAttribute(
+              "aria-pressed",
+              String(item === button)
+            );
+          });
+
+          loadFeature(feature);
+        });
+
+        featureIndex.appendChild(button);
+      });
+    }
+
+    async function fetchText(url, label) {
+      if (!url) {
+        throw new Error(`${label} URL is not configured.`);
+      }
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(
+          `${label} request failed: HTTP ${response.status}`
+        );
+      }
+
+      return response.text();
+    }
+
+    // Match tokens without interpreting markup as HTML.
+    function tokenize(source, language) {
+      const patterns = {
+        javascript: {
+          comment: /^(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)/,
+          string: /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/,
+          keyword: /^(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|class|extends|new|this|super|import|export|from|default|async|await|throw|try|catch|finally|typeof|instanceof|in|of|void|delete|yield|true|false|null|undefined)\b/,
+          number: /^(?:0x[\da-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)/i,
+          identifier: /^[A-Za-z_$][\w$]*/,
+          operator: /^(?:===|!==|=>|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|&&|\|\||\?\?|[+\-*\/%=<>!&|^~?:])/
+        },
+
+        python: {
+          comment: /^#[^\n]*/,
+          string: /^(?:[rubf]{0,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/i,
+          keyword: /^(?:and|as|assert|async|await|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield)\b/,
+          number: /^(?:0x[\da-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)/i,
+          identifier: /^[A-Za-z_]\w*/,
+          operator: /^(?:\*\*|\/\/|==|!=|<=|>=|:=|\+=|-=|\*=|\/=|[+\-*\/%=<>!&|^~])/
+        },
+
+        typescript: {
+          comment: /^(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)/,
+          string: /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/,
+          keyword: /^(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|class|extends|implements|interface|type|enum|new|this|super|import|export|from|default|async|await|throw|try|catch|finally|typeof|instanceof|in|of|void|delete|yield|true|false|null|undefined|public|private|protected|readonly|static|abstract|as|keyof|never|unknown|any|number|string|boolean)\b/,
+          number: /^(?:0x[\da-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)/i,
+          identifier: /^[A-Za-z_$][\w$]*/,
+          operator: /^(?:===|!==|=>|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|&&|\|\||\?\?|[+\-*\/%=<>!&|^~?:])/
+        },
+
+        rust: {
+          comment: /^(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)/,
+          string: /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/,
+          keyword: /^(?:as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|Some|None|Ok|Err)\b/,
+          number: /^(?:0x[\da-f]+|\d+(?:\.\d+)?)/i,
+          identifier: /^[A-Za-z_]\w*/,
+          operator: /^(?:=>|->|==|!=|<=|>=|\+=|-=|&&|\|\||[+\-*\/%=<>!&|^~?:])/
+        },
+
+        go: {
+          comment: /^(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/)/,
+          string: /^(?:"(?:\\.|[^"\\])*"|`[^`]*`|'(?:\\.|[^'\\])*')/,
+          keyword: /^(?:break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var|true|false|nil|iota)\b/,
+          number: /^(?:0x[\da-f]+|\d+(?:\.\d+)?)/i,
+          identifier: /^[A-Za-z_]\w*/,
+          operator: /^(?::=|==|!=|<=|>=|\+\+|--|\+=|-=|&&|\|\||[+\-*\/%=<>!&|^~])/
+        },
+
+        json: {
+          string: /^(?:"(?:\\.|[^"\\])*")/,
+          keyword: /^(?:true|false|null)\b/,
+          number: /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/i,
+          operator: /^[{}[\]:,]/
+        },
+
+        css: {
+          comment: /^\/\*[\s\S]*?\*\//,
+          string: /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/,
+          number: /^(?:#[\da-f]{3,8}\b|\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms)?)/i,
+          keyword: /^(?:important|inherit|initial|unset|none|auto|block|flex|grid|absolute|relative|fixed)\b/i,
+          identifier: /^-?[A-Za-z_][\w-]*/,
+          operator: /^[{}:;,()>+~]/
+        },
+
+        html: {
+          comment: /^<!--[\s\S]*?-->/,
+          tag: /^<\/?[A-Za-z][^>]*>/,
+          string: /^(?:"[^"]*"|'[^']*')/,
+          operator: /^[=]/
+        },
+
+        bash: {
+          comment: /^#[^\n]*/,
+          string: /^(?:"(?:\\.|[^"\\])*"|'[^']*')/,
+          keyword: /^(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|in|return|export|local|readonly|unset|set|shift|exit)\b/,
+          number: /^\d+/,
+          identifier: /^[A-Za-z_][\w]*/,
+          operator: /^(?:&&|\|\||[|&;<>()=])/
+        },
+
+        yaml: {
+          comment: /^#[^\n]*/,
+          string: /^(?:"(?:\\.|[^"\\])*"|'[^']*')/,
+          keyword: /^(?:true|false|null|yes|no|on|off)\b/i,
+          number: /^-?\d+(?:\.\d+)?/,
+          identifier: /^[A-Za-z_][\w.-]*/,
+          operator: /^[:[\]{}|>,?-]/
+        }
+      };
+
+      const rules = patterns[language] || patterns.javascript;
+      const tokens = [];
+      let position = 0;
+
+      while (position < source.length) {
+        const remaining = source.slice(position);
+
+        // Preserve whitespace and line breaks exactly.
+        const whitespace = /^\s+/.exec(remaining);
+
+        if (whitespace) {
+          tokens.push({
+            type: "text",
+            value: whitespace[0]
+          });
+
+          position += whitespace[0].length;
+          continue;
+        }
+
+        let found = false;
+
+        // Try comments and strings before identifiers and operators.
+        for (const type of [
+          "comment",
+          "string",
+          "tag",
+          "keyword",
+          "number",
+          "identifier",
+          "operator"
+        ]) {
+          const rule = rules[type];
+
+          if (!rule) {
+            continue;
+          }
+
+          const match = rule.exec(remaining);
+
+          if (!match || !match[0]) {
+            continue;
+          }
+
+          let tokenType = type;
+
+          // Color function calls separately.
+          if (
+            type === "identifier" &&
+            /^\s*\(/.test(remaining.slice(match[0].length))
+          ) {
+            tokenType = "function";
+          }
+
+          // Color property names in JSON and CSS.
+          if (
+            type === "string" &&
+            language === "json" &&
+            /^\s*:/.test(remaining.slice(match[0].length))
+          ) {
+            tokenType = "property";
+          }
+
+          if (
+            type === "identifier" &&
+            language === "css" &&
+            /^\s*:/.test(remaining.slice(match[0].length))
+          ) {
+            tokenType = "property";
+          }
+
+          tokens.push({
+            type: tokenType,
+            value: match[0]
+          });
+
+          position += match[0].length;
+          found = true;
+          break;
+        }
+
+        if (!found) {
+          // Consume one Unicode code point to guarantee progress.
+          const character = String.fromCodePoint(
+            source.codePointAt(position)
+          );
+
+          tokens.push({
+            type: "text",
+            value: character
+          });
+
+          position += character.length;
+        }
+      }
+
+      return tokens;
+    }
+
+    function highlightCode(source, language) {
+      const fragment = document.createDocumentFragment();
+      const tokens = tokenize(source, language);
+
+      for (const token of tokens) {
+        if (token.type === "text") {
+          fragment.appendChild(
+            document.createTextNode(token.value)
+          );
+
+          continue;
+        }
+
+        const span = document.createElement("span");
+        span.className = `token-${token.type}`;
+        span.textContent = token.value;
+
+        fragment.appendChild(span);
+      }
+
+      return fragment;
+    }
+
+    async function loadFeature(feature) {
+      const thisRequest = ++requestNumber;
+
+      status.textContent = `Loading ${feature.name}…`;
+
+      showMessage(srsContent, "Loading SRS…");
+      showMessage(codeContent, "Loading source code…");
+
+      const [srsResult, codeResult] = await Promise.allSettled([
+        fetchText(feature.srsUrl, "SRS"),
+        fetchText(feature.codeUrl, "Source code")
+      ]);
+
+      if (thisRequest !== requestNumber) {
+        return;
+      }
+
+      // Render SRS Markdown.
+      if (srsResult.status === "fulfilled") {
+        const markdown = srsResult.value;
+
+        if (window.marked) {
+          srsContent.innerHTML = marked.parse(markdown);
+        } else {
+          const pre = document.createElement("pre");
+          pre.textContent = markdown;
+          srsContent.replaceChildren(pre);
+        }
+      } else {
+        showMessage(
+          srsContent,
+          srsResult.reason.message || "Unable to load SRS.",
+          true
+        );
+      }
+
+      // Render highlighted source code.
+      if (codeResult.status === "fulfilled") {
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        const language = getLanguage(feature.codeUrl);
+
+        code.appendChild(
+          highlightCode(codeResult.value, language)
+        );
+
+        pre.appendChild(code);
+        codeContent.replaceChildren(pre);
+      } else {
+        showMessage(
+          codeContent,
+          codeResult.reason.message || "Unable to load source code.",
+          true
+        );
+      }
+
+      const errors = [];
+
+      if (srsResult.status === "rejected") {
+        errors.push("SRS unavailable");
+      }
+
+      if (codeResult.status === "rejected") {
+        errors.push("source code unavailable");
+      }
+
+      status.textContent = errors.length
+        ? errors.join(" · ")
+        : `${feature.name} loaded`;
+    }
+
+    projectSelect.addEventListener("change", () => {
+      const project = PROJECTS[Number(projectSelect.value)];
+
+      renderFeatureButtons(project);
+
+      if (project.features.length > 0) {
+        featureIndex.querySelector("button")?.click();
+      } else {
+        ++requestNumber;
+
+        showMessage(srsContent, "This project has no features.");
+        showMessage(codeContent, "This project has no features.");
+
+        status.textContent = "No features configured.";
+      }
+    });
+
+    // Initialize the viewer.
+    populateProjects();
+
+    if (PROJECTS.length > 0) {
+      projectSelect.value = "0";
+
+      const project = PROJECTS[0];
+
+      renderFeatureButtons(project);
+
+      if (project.features.length > 0) {
+        featureIndex.querySelector("button")?.click();
+      }
+    }
+  </script>
+</body>
+</html>
